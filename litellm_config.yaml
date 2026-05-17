@@ -1,0 +1,48 @@
+# LiteLLM Proxy configuration
+# Docs: https://docs.litellm.ai/docs/proxy/configs
+#
+# Start: docker compose up litellm
+# Use:   http://localhost:4000 (OpenAI-compatible endpoint)
+
+model_list:
+  - model_name: fast          # alias used by clients
+    litellm_params:
+      model: anthropic/claude-haiku-4-5
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  - model_name: smart
+    litellm_params:
+      model: anthropic/claude-sonnet-4-5
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  - model_name: smart         # fallback to OpenAI if Anthropic fails
+    litellm_params:
+      model: openai/gpt-4o
+      api_key: os.environ/OPENAI_API_KEY
+
+router_settings:
+  routing_strategy: least-busy
+  num_retries: 3
+  retry_after: 5
+  fallbacks:
+    - smart: [gpt-4o]
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  store_model_in_db: true
+  database_url: os.environ/DATABASE_URL
+
+  # Cost & spend tracking
+  track_cost_callback: true
+
+  # Cache (Redis)
+  cache: true
+  cache_params:
+    type: redis
+    host: redis
+    port: 6379
+
+litellm_settings:
+  success_callback: []
+  failure_callback: []
+  drop_params: true       # ignore unsupported params per provider

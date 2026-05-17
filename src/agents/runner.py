@@ -16,6 +16,8 @@ from rich.panel import Panel
 from rich.table import Table
 
 from src.agents.coverage_agent import CoverageAgent, analyze_multiple_agencies
+from src.agents.langchain_agent import LangChainDemos
+from src.agents.router_agent import RouterAgent
 from src.core.concurrency import run_pipeline, shutdown_executors
 from src.core.config import get_settings
 from src.core.logging import configure_logging
@@ -157,6 +159,112 @@ async def demo_langchain() -> None:
     console.print(t)
 
 
+async def demo_router_agent() -> None:
+    """Demo 6: Multi-agent handoff — Router → Specialist."""
+    console.rule("[bold cyan]Demo 6 — Multi-Agent Handoff (Router → Specialist)[/]")
+    router = RouterAgent()
+
+    queries = [
+        ("What open shifts are available for agency 42 next week?",  42),
+        ("What is the coverage risk for agency 10 in January 2025?", 10),
+        ("Generate an executive report for agencies 1, 2, and 3.",   1),
+        ("What is the meaning of life?",                             1),
+    ]
+
+    t = Table(title="Router → Specialist Handoff Results")
+    t.add_column("Query", max_width=40)
+    t.add_column("Domain", style="bold")
+    t.add_column("Answer", max_width=60)
+
+    results = await router.run_batch(queries, max_concurrent=2)
+    for (query, _), result in zip(queries, results):
+        domain_color = {
+            "scheduling": "cyan", "coverage": "yellow",
+            "reporting": "green", "unknown": "red",
+        }.get(result.domain, "white")
+        t.add_row(
+            query[:40] + ("…" if len(query) > 40 else ""),
+            f"[{domain_color}]{result.domain}[/]",
+            result.answer[:60] + ("…" if len(result.answer) > 60 else ""),
+        )
+    console.print(t)
+
+
+async def demo_cache() -> None:
+    """Demo 7: Redis-backed semantic cache (in-memory fallback)."""
+    console.rule("[bold cyan]Demo 7 — Semantic Cache (Redis / in-memory fallback)[/]")
+    from src.core.cache import get_cache
+
+    cache = await get_cache()
+    payload = {"agency_id": 42, "date_from": "2025-01-01", "date_to": "2025-01-07"}
+
+    # First call — cache miss
+    hit = await cache.get("analyze_coverage", payload)
+    console.print(f"  Cache miss: {hit is None}")
+
+    # Populate cache
+    from src.tools.shift_tools import analyze_coverage
+    result = await analyze_coverage(**payload)
+    await cache.set("analyze_coverage", payload, result)
+
+    # Second call — cache hit
+    hit = await cache.get("analyze_coverage", payload)
+    console.print(f"  Cache hit:  {hit is not None}")
+    console.print(Panel(
+        f"coverage_pct={hit['coverage_pct']}%  risk={hit['risk_level']}",
+        title="Cached result",
+        border_style="green",
+    ))
+
+    await cache.flush()
+
+
+async def demo_tracing() -> None:
+    """Demo 8: OpenTelemetry tracing with @traced decorator."""
+    console.rule("[bold cyan]Demo 8 — OpenTelemetry Tracing (console exporter)[/]")
+    from src.core.tracing import configure_tracing, get_tracer, traced
+
+    configure_tracing()
+    tracer = get_tracer(__name__)
+
+    @traced("demo.analyze_coverage", attributes={"service": "mcp-agents-demo"})
+    async def traced_analysis(agency_id: int) -> dict:
+        from src.tools.shift_tools import analyze_coverage
+        return await analyze_coverage(agency_id, "2025-01-01", "2025-01-07")
+
+    with tracer.start_as_current_span("demo.runner") as root:
+        root.set_attribute("demo.name", "tracing")
+        result = await traced_analysis(42)
+
+    console.print(Panel(
+        f"Span 'demo.runner' → 'demo.analyze_coverage' exported.\n"
+        f"coverage_pct={result['coverage_pct']}% | risk={result['risk_level']}\n\n"
+        f"[dim]In production: set APP_ENV=production and add OTEL_EXPORTER_OTLP_ENDPOINT\n"
+        f"to export to Jaeger → http://localhost:16686[/]",
+        title="OTel Trace",
+        border_style="blue",
+    ))
+
+
+async def demo_portkey() -> None:
+    """Demo 9: Portkey gateway — fallback routing + semantic cache + guardrails."""
+    console.rule("[bold cyan]Demo 9 — Portkey Gateway (fallback · cache · guardrails)[/]")
+    from src.gateway.portkey_client import get_portkey_client
+
+    client = get_portkey_client()
+    messages = [
+        {"role": "system", "content": "You are a scheduling assistant."},
+        {"role": "user",   "content": "Summarize coverage risks for agency 42 in January 2025."},
+    ]
+    result = await client.complete(messages, agency_id=42, feature="reporting")
+
+    console.print(Panel(
+        result.data,
+        title=f"Portkey response | model={result.model_used} | {result.duration_ms:.0f}ms",
+        border_style="magenta",
+    ))
+
+
 async def main() -> None:
     configure_logging()
     settings = get_settings()
@@ -174,6 +282,10 @@ async def main() -> None:
         await demo_pipeline()
         await demo_thread_executor()
         await demo_langchain()
+        await demo_router_agent()
+        await demo_cache()
+        await demo_tracing()
+        await demo_portkey()
     finally:
         shutdown_executors(wait=False)
 
