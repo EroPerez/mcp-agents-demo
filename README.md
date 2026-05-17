@@ -19,6 +19,8 @@
 | AI Agent | Pydantic AI — structured output | `src/agents/coverage_agent.py` |
 | LangChain | LCEL · Tool Agent · Streaming · Parallel | `src/agents/langchain_agent.py` |
 | Multi-Agent | Router → Specialist handoff pattern | `src/agents/router_agent.py` |
+| CrewAI | 3-agent sequential crew — Analyst · Strategist · Reporter | `src/agents/crewai_agent.py` |
+| AutoGen | RoundRobinGroupChat + SelectorGroupChat + tool-calling | `src/agents/autogen_agent.py` |
 | Async concurrency | asyncio · Semaphore · Queue · TaskGroup | `src/core/concurrency.py` |
 | Blocking I/O | ThreadPoolExecutor + contextvars | `src/core/concurrency.py` |
 | CPU-bound | ProcessPoolExecutor — no GIL | `src/core/concurrency.py` |
@@ -29,7 +31,7 @@
 | Tracing | OpenTelemetry — `@traced` decorator, Jaeger export | `src/core/tracing.py` |
 | Observability | structlog JSON + tenacity retry | `src/core/logging.py` |
 | Settings | pydantic-settings — .env + env vars | `src/core/config.py` |
-| Testing | pytest-asyncio — 50 unit + integration tests | `tests/` |
+| Testing | pytest-asyncio — 60 unit + integration tests | `tests/` |
 | CI/CD | GitHub Actions — lint, mypy, tests | `.github/workflows/ci.yml` |
 
 ---
@@ -56,7 +58,9 @@ mcp-agents-demo/
 │   │   ├── coverage_agent.py  # Pydantic AI structured-output agent
 │   │   ├── langchain_agent.py # LangChain: LCEL · Tool Agent · Streaming
 │   │   ├── router_agent.py    # Multi-agent Router → Specialist handoff
-│   │   └── runner.py          # All 9 demos — Rich console output
+│   │   ├── crewai_agent.py    # CrewAI: 3-agent sequential crew
+│   │   ├── autogen_agent.py   # AutoGen: RoundRobin + Selector group chats
+│   │   └── runner.py          # All 11 demos — Rich console output
 │   └── server/
 │       └── main.py            # FastMCP server (tools + resources + prompts)
 ├── tests/
@@ -113,6 +117,8 @@ uv run demo-agents
 | 7 · Semantic Cache | Redis / in-memory fallback, TTL per namespace |
 | 8 · OpenTelemetry | `@traced` decorator, span attributes, Jaeger export |
 | 9 · Portkey | Guardrails · semantic cache · multi-provider fallback |
+| 10 · CrewAI | 3-agent sequential crew — Analyst → Strategist → Reporter |
+| 11 · AutoGen | RoundRobinGroupChat — DataAgent → AnalystAgent → PlannerAgent |
 
 ### 4. Run the MCP server
 
@@ -166,6 +172,27 @@ docker compose up --build
 ```
 
 Available tools: `tool_search_shifts` · `tool_get_schedule` · `tool_update_shift_status` · `tool_analyze_coverage` · `tool_ai_analyze_coverage`
+
+### CrewAI — Sequential crew
+```python
+crew = Crew(
+    agents=[analyst, strategist, reporter],   # 3 specialist agents
+    tasks=[analysis_task, strategy_task, report_task],
+    process=Process.sequential,               # each task feeds the next
+)
+crew_output = crew.kickoff()                  # runs synchronously
+```
+Each task has `context=[prev_task]` — the output of one agent becomes the input of the next.
+
+### AutoGen — RoundRobinGroupChat
+```python
+team = RoundRobinGroupChat(
+    participants=[data_agent, analyst_agent, planner_agent],
+    termination_condition=TextMentionTermination("PLAN_COMPLETE") | MaxMessageTermination(9),
+)
+async for msg in team.run_stream(task=task):
+    print(msg.source, msg.content)  # streaming token-by-token
+```
 
 ---
 
@@ -232,8 +259,8 @@ async def call_llm(prompt: str) -> str: ...
 - [x] OpenTelemetry tracing — `@traced` decorator, Jaeger export
 - [x] Multi-agent handoff — Router → Specialist pattern
 - [x] LiteLLM Proxy — `docker-compose` service with Redis + PostgreSQL
-- [ ] CrewAI multi-agent crew demo
-- [ ] AutoGen code-execution agent demo
+- [x] CrewAI — 3-agent sequential crew (Analyst · Strategist · Reporter)
+- [x] AutoGen — RoundRobinGroupChat + SelectorGroupChat + tool-calling agents
 
 ---
 

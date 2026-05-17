@@ -35,6 +35,9 @@ dependencies = [
     "opentelemetry-sdk>=1.39.1",
     "opentelemetry-exporter-otlp-proto-grpc>=1.39.1",
     "opentelemetry-instrumentation-httpx>=0.60b1",
+    "crewai>=1.6.1",
+    "pyautogen>=0.10.0",
+    "autogen-ext[anthropic,openai]>=0.7.5",
 ]
 
 [dependency-groups]

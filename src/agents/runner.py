@@ -18,6 +18,8 @@ from rich.table import Table
 from src.agents.coverage_agent import CoverageAgent, analyze_multiple_agencies
 from src.agents.langchain_agent import LangChainDemos
 from src.agents.router_agent import RouterAgent
+from src.agents.crewai_agent import run_crew_demo
+from src.agents.autogen_agent import run_autogen_demo
 from src.core.concurrency import run_pipeline, shutdown_executors
 from src.core.config import get_settings
 from src.core.logging import configure_logging
@@ -265,6 +267,49 @@ async def demo_portkey() -> None:
     ))
 
 
+async def demo_crewai() -> None:
+    """Demo 10: CrewAI — 3-agent sequential crew (Analyst → Strategist → Reporter)."""
+    console.rule("[bold cyan]Demo 10 — CrewAI Multi-Agent Crew[/]")
+
+    result = await run_crew_demo(agency_id=42, date_from="2025-01-01", date_to="2025-01-31")
+
+    t = Table(title=f"Crew result — agency {result['agency_id']} | mode: {result['mode']}")
+    t.add_column("Agent", style="bold cyan")
+    t.add_column("Role")
+    for agent in result.get("agents_used", []):
+        role_map = {
+            "Coverage Analyst": "Fetches & analyzes coverage data",
+            "Risk Strategist":   "Builds prioritized action plan",
+            "Executive Report Writer": "Writes leadership briefing",
+        }
+        t.add_row(agent, role_map.get(agent, ""))
+    console.print(t)
+
+    console.print(Panel(
+        result.get("executive_briefing", ""),
+        title="Executive Briefing (Reporter Agent output)",
+        border_style="green",
+    ))
+
+
+async def demo_autogen() -> None:
+    """Demo 11: AutoGen — RoundRobinGroupChat with tool-calling agents."""
+    console.rule("[bold cyan]Demo 11 — AutoGen RoundRobinGroupChat[/]")
+
+    result = await run_autogen_demo(agency_id=42, date_from="2025-01-01", date_to="2025-01-31")
+
+    console.print(f"  Team: [bold]{result['team']}[/]  |  Messages exchanged: [bold]{result['messages']}[/]  |  Mode: {result['mode']}")
+
+    for turn in result.get("conversation", []):
+        agent_color = {"DataAgent": "cyan", "AnalystAgent": "yellow", "PlannerAgent": "green"}.get(turn["agent"], "white")
+        console.print(Panel(
+            turn["message"],
+            title=f"[{agent_color}]{turn['agent']}[/]",
+            border_style=agent_color,
+            padding=(0, 1),
+        ))
+
+
 async def main() -> None:
     configure_logging()
     settings = get_settings()
@@ -286,6 +331,8 @@ async def main() -> None:
         await demo_cache()
         await demo_tracing()
         await demo_portkey()
+        await demo_crewai()
+        await demo_autogen()
     finally:
         shutdown_executors(wait=False)
 
