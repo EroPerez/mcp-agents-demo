@@ -117,6 +117,46 @@ async def demo_thread_executor() -> None:
     ))
 
 
+async def demo_langchain() -> None:
+    """Demo 5: LangChain — LCEL chain, tool-calling agent, streaming, parallel chains."""
+    console.rule("[bold cyan]Demo 5 — LangChain (LCEL · Tool Agent · Streaming · Parallel)[/]")
+    from src.agents.langchain_agent import LangChainDemos
+
+    results = await LangChainDemos().run_all()
+
+    # 5a LCEL chain
+    console.print(Panel(
+        results["lcel_chain"],
+        title="5a · LCEL Chain — shift supervisor briefing",
+        border_style="magenta",
+    ))
+
+    # 5b Tool-calling agent
+    agent = results["tool_agent"]
+    console.print(Panel(
+        f"[bold]Query:[/] {agent['query']}\n\n"
+        f"[bold]Answer:[/] {agent['answer']}\n\n"
+        f"[dim]Tool calls made: {agent['intermediate_steps']}[/]",
+        title="5b · Tool-Calling Agent",
+        border_style="magenta",
+    ))
+
+    # 5c Streaming
+    console.print(Panel(
+        results["streaming"],
+        title="5c · Streaming (astream_events)",
+        border_style="magenta",
+    ))
+
+    # 5d Parallel chains
+    t = Table(title="5d · Parallel LCEL Chains (3 agencies concurrently)")
+    t.add_column("Agency ID")
+    t.add_column("Summary")
+    for row in results["parallel_chains"]:
+        t.add_row(str(row.get("agency_id", "")), row.get("summary", ""))
+    console.print(t)
+
+
 async def main() -> None:
     configure_logging()
     settings = get_settings()
@@ -133,6 +173,7 @@ async def main() -> None:
         await demo_parallel_agents()
         await demo_pipeline()
         await demo_thread_executor()
+        await demo_langchain()
     finally:
         shutdown_executors(wait=False)
 
