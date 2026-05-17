@@ -5,7 +5,7 @@ description = "Production scaffold: FastMCP + Pydantic AI + asyncio + LiteLLM + 
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.12"
-authors = [{ name = "Erodis Pérez Michel", email = "erodis@example.com" }]
+authors = [{ name = "Erodis Pérez Michel", email = "eperezm1986@gmail.com" }]
 keywords = ["mcp", "agents", "ai", "pydantic", "asyncio", "litellm"]
 classifiers = [
     "Development Status :: 3 - Alpha",
