@@ -17,6 +17,7 @@
 | MCP Server | FastMCP 2.x | `src/server/main.py` |
 | Validation | Pydantic v2 (discriminated unions, generics) | `src/core/models.py` |
 | AI Agent | Pydantic AI (structured output) | `src/agents/coverage_agent.py` |
+| LangChain | LCEL · Tool Agent · Streaming · Parallel chains | `src/agents/langchain_agent.py` |
 | Async concurrency | asyncio · Semaphore · Queue · TaskGroup | `src/core/concurrency.py` |
 | Blocking I/O | ThreadPoolExecutor + contextvars | `src/core/concurrency.py` |
 | CPU-bound | ProcessPoolExecutor (no GIL) | `src/core/concurrency.py` |
@@ -46,12 +47,15 @@ mcp-agents-demo/
 │   │   └── shift_tools.py     # Domain tools with @tool decorator
 │   ├── agents/
 │   │   ├── coverage_agent.py  # Pydantic AI structured-output agent
+│   │   ├── langchain_agent.py # LangChain: LCEL · Tool Agent · Streaming · Parallel
 │   │   └── runner.py          # Multi-demo orchestration entry point
 │   └── server/
 │       └── main.py            # FastMCP server (tools + resources + prompts)
 ├── tests/
 │   ├── unit/                  # Fast, no-network unit tests
 │   └── integration/           # Agent tests in demo mode (no API key needed)
+├── docs/
+│   └── Python_Avanzado_MCP_IA.pdf  # Reference guide
 ├── .github/workflows/ci.yml
 ├── pyproject.toml             # uv / hatchling / ruff / mypy / pytest config
 ├── Dockerfile
@@ -146,6 +150,56 @@ Available tools in Claude Desktop:
 
 ---
 
+## Demos
+
+| # | Demo | Patrón | Archivo |
+|---|---|---|---|
+| 1 | Coverage Agent (single) | Pydantic AI structured output | `src/agents/coverage_agent.py` |
+| 2 | Multi-Agency Parallel | `asyncio.Semaphore` + `gather` | `src/agents/coverage_agent.py` |
+| 3 | Queue Pipeline | `asyncio.Queue` producer/consumer | `src/core/concurrency.py` |
+| 4 | ThreadPoolExecutor | Blocking I/O sin bloquear el event loop | `src/core/concurrency.py` |
+| 5 | LangChain | LCEL · Tool Agent · Streaming · Parallel | `src/agents/langchain_agent.py` |
+
+---
+
+## LangChain Demo
+
+`src/agents/langchain_agent.py` cubre cuatro patrones distintos:
+
+### 5a — LCEL Chain (composición con `|`)
+```python
+chain = (
+    RunnablePassthrough()   # pass-through input dict
+    | prompt                # render ChatPromptTemplate
+    | llm                   # call Claude via ChatAnthropic
+    | StrOutputParser()     # extract text from AIMessage
+)
+result = await chain.ainvoke({...})
+```
+
+### 5b — Tool-calling Agent
+```python
+agent    = create_tool_calling_agent(llm, tools, prompt)
+executor = AgentExecutor(agent=agent, tools=tools, max_iterations=5)
+result   = await executor.ainvoke({"input": query})
+# The LLM decides which tools to call and in what order
+```
+
+### 5c — Streaming con `astream_events`
+```python
+async for event in chain.astream_events(inputs, version="v2"):
+    if event["event"] == "on_chat_model_stream":
+        chunk = event["data"]["chunk"].content
+        # handle token-by-token output
+```
+
+### 5d — Parallel chains con `asyncio.gather`
+```python
+results = await asyncio.gather(*[run_one(agency_id) for agency_id in agency_ids])
+```
+
+---
+
 ## Key Patterns Explained
 
 ### Decorator stacking (order matters)
@@ -228,11 +282,20 @@ uv run pre-commit install
 
 ## Roadmap
 
+- [x] FastMCP server (tools, resources, prompt templates)
+- [x] Pydantic AI structured-output agent
+- [x] LangChain: LCEL · Tool Agent · Streaming · Parallel chains
 - [ ] Redis-backed semantic cache layer
 - [ ] Portkey guardrails integration
 - [ ] OpenTelemetry tracing (Jaeger export)
 - [ ] Multi-agent handoff (router → specialist pattern)
 - [ ] LiteLLM Proxy server `docker-compose` service
+
+---
+
+## Reference Guide
+
+📄 [`docs/Python_Avanzado_MCP_IA.pdf`](docs/Python_Avanzado_MCP_IA.pdf) — guía completa de todos los patrones implementados en este repo: decoradores, Pydantic v2, asyncio, ThreadPoolExecutor, ProcessPoolExecutor, FastMCP, Pydantic AI, LangChain, LiteLLM, Helicone, Portkey y stack de producción.
 
 ---
 
